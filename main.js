@@ -53,7 +53,6 @@ const bombCountEl = document.querySelector("#bomb-count");
 const acidCountEl = document.querySelector("#acid-count");
 const lightningCountEl = document.querySelector("#lightning-count");
 const shopCoinsEl = document.querySelector("#shop-coins");
-const saveResultEl = document.querySelector("#save-result");
 const saveHintEl = document.querySelector("#save-hint");
 const savingEl = document.querySelector("#saving");
 
@@ -113,7 +112,6 @@ wallBtn.addEventListener("pointerdown", (event) => onArmPointer(event, "wall"));
 bombBtn.addEventListener("pointerdown", (event) => onArmPointer(event, "bomb"));
 acidBtn.addEventListener("pointerdown", (event) => onArmPointer(event, "acid"));
 lightningBtn.addEventListener("pointerdown", (event) => onArmPointer(event, "lightning"));
-saveResultEl.addEventListener("click", sendResult);
 
 canvas.addEventListener("pointerdown", (event) => {
   if (game.phase !== "playing") return;
@@ -316,7 +314,6 @@ function showGameOver() {
   overBestEl.textContent = String(best);
   recordEl.classList.toggle("hidden", !runRecord);
   const inside = insideTelegram();
-  saveResultEl.classList.toggle("hidden", !inside);
   saveHintEl.classList.toggle("hidden", inside);
   savingEl.classList.toggle("hidden", !inside);
   overEl.classList.remove("hidden");
