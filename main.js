@@ -12,9 +12,10 @@ import {
   LIGHTNING_COST,
   LIGHTNING_UNLOCK_WAVE,
   buildResultPayload,
-  buildStartParam,
   createGame,
 } from "./game.js";
+
+const API = "https://mihmakbot.mihmak.workers.dev";
 
 const STORAGE = {
   best: "kamnepad-best",
@@ -55,6 +56,12 @@ const lightningCountEl = document.querySelector("#lightning-count");
 const shopCoinsEl = document.querySelector("#shop-coins");
 const saveHintEl = document.querySelector("#save-hint");
 const savingEl = document.querySelector("#saving");
+const boardEl = document.querySelector("#board");
+const boardListEl = document.querySelector("#board-list");
+const boardPlayersEl = document.querySelector("#board-players");
+const boardStatusEl = document.querySelector("#board-status");
+const tabScoreEl = document.querySelector("#tab-score");
+const tabCoinsEl = document.querySelector("#tab-coins");
 
 const SHOP_ITEMS = [
   ["wall", WALL_COST, WALL_UNLOCK_WAVE],
@@ -86,8 +93,10 @@ let shopReturn = "start";
 let runRecord = false;
 let overShown = false;
 let saveTimer = 0;
-let closeTimer = 0;
-let saveStarted = false;
+let saveGeneration = 0;
+let boardReturn = "start";
+let boardKind = "score";
+let boardToken = 0;
 let lastTime = performance.now();
 
 bestEl.textContent = String(best);
@@ -105,6 +114,11 @@ document.querySelector("#again").addEventListener("click", begin);
 document.querySelector("#shop-start").addEventListener("click", () => openShop("start"));
 document.querySelector("#shop-over").addEventListener("click", () => openShop("over"));
 document.querySelector("#shop-close").addEventListener("click", closeShop);
+document.querySelector("#board-start").addEventListener("click", () => openBoard("start"));
+document.querySelector("#board-over").addEventListener("click", () => openBoard("over"));
+document.querySelector("#board-close").addEventListener("click", closeBoard);
+tabScoreEl.addEventListener("click", () => loadBoard("score"));
+tabCoinsEl.addEventListener("click", () => loadBoard("coins"));
 for (const [kind] of SHOP_ITEMS) {
   document.querySelector(`#buy-${kind}`).addEventListener("click", () => buy(kind));
 }
@@ -161,13 +175,10 @@ canvas.addEventListener("pointercancel", (event) => finishPointer(event.pointerI
 canvas.addEventListener("contextmenu", (event) => event.preventDefault());
 
 function begin() {
+  saveGeneration += 1;
   clearSaveTimer();
-  if (closeTimer) {
-    window.clearTimeout(closeTimer);
-    closeTimer = 0;
-  }
-  saveStarted = false;
   savingEl.classList.add("hidden");
+  savingEl.classList.remove("warn");
   pointers.clear();
   drawingPointer = null;
   game.cancelWall();
@@ -178,6 +189,7 @@ function begin() {
   startEl.classList.add("hidden");
   overEl.classList.add("hidden");
   shopEl.classList.add("hidden");
+  boardEl.classList.add("hidden");
   game.start();
   noteWave();
   syncAbilityButtons();
@@ -313,17 +325,87 @@ function showGameOver() {
   overWaveEl.textContent = String(game.wave);
   overBestEl.textContent = String(best);
   recordEl.classList.toggle("hidden", !runRecord);
+  const initData = initDataString();
   const inside = insideTelegram();
-  saveHintEl.classList.toggle("hidden", inside);
-  savingEl.classList.toggle("hidden", !inside);
+  saveHintEl.classList.toggle("hidden", inside || initData.length > 0);
+  savingEl.textContent = "💾 Сохраняю результат…";
+  savingEl.classList.remove("warn");
+  savingEl.classList.toggle("hidden", initData.length === 0 && !inside);
   overEl.classList.remove("hidden");
   haptic(runRecord ? "record" : "over");
-  if (inside) {
+  const stats = {
+    score: game.score,
+    wave: game.wave,
+    coins,
+    best: Math.max(best, game.score),
+  };
+  if (initData.length > 0) {
+    const generation = ++saveGeneration;
+    submitScore(stats, generation, false);
+  } else if (inside) {
     clearSaveTimer();
     saveTimer = window.setTimeout(() => {
       saveTimer = 0;
-      sendResult();
+      sendDataFallback(stats);
     }, 2000);
+  }
+}
+
+function initDataString() {
+  const telegram = telegramApp();
+  return telegram && typeof telegram.initData === "string" ? telegram.initData : "";
+}
+
+async function submitScore(stats, generation, isRetry) {
+  if (generation !== saveGeneration) return;
+  savingEl.textContent = "💾 Сохраняю результат…";
+  savingEl.classList.remove("warn");
+  savingEl.classList.remove("hidden");
+  try {
+    const response = await fetch(`${API}/api/score`, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        initData: initDataString(),
+        score: Math.max(0, Math.floor(stats.score)),
+        wave: Math.max(0, Math.floor(stats.wave)),
+        coins: Math.max(0, Math.floor(stats.coins)),
+        best: Math.max(0, Math.floor(stats.best)),
+      }),
+    });
+    const data = await response.json().catch(() => null);
+    if (generation !== saveGeneration) return;
+    if (!response.ok || !data || data.ok !== true) throw new Error("save failed");
+    savingEl.textContent = `✅ Сохранено: ${data.nick}, рекорд ${data.best}, место #${data.place}`;
+    savingEl.classList.remove("warn");
+  } catch {
+    if (generation !== saveGeneration) return;
+    savingEl.textContent = "⚠️ Не удалось сохранить";
+    savingEl.classList.add("warn");
+    if (!isRetry) {
+      clearSaveTimer();
+      saveTimer = window.setTimeout(() => {
+        saveTimer = 0;
+        submitScore(stats, generation, true);
+      }, 3000);
+    }
+  }
+}
+
+function sendDataFallback(stats) {
+  const telegram = telegramApp();
+  if (!telegram || typeof telegram.sendData !== "function") {
+    savingEl.textContent = "⚠️ Не удалось сохранить";
+    savingEl.classList.add("warn");
+    return;
+  }
+  try {
+    const text = buildResultPayload(stats);
+    if (text.length > 4096) throw new Error("payload");
+    telegram.sendData(text);
+  } catch {
+    savingEl.textContent = "⚠️ Не удалось сохранить";
+    savingEl.classList.add("warn");
   }
 }
 
@@ -342,40 +424,6 @@ function insideTelegram() {
   return Boolean(telegram) && telegram.platform !== "unknown";
 }
 
-function sendResult() {
-  const telegram = telegramApp();
-  if (!insideTelegram() || saveStarted) return;
-  saveStarted = true;
-  clearSaveTimer();
-  const stats = {
-    score: game.score,
-    wave: game.wave,
-    coins,
-    best: Math.max(best, game.score),
-  };
-  const initData = typeof telegram.initData === "string" ? telegram.initData : "";
-  if (initData.length === 0 && typeof telegram.sendData === "function") {
-    try {
-      const text = buildResultPayload(stats);
-      if (text.length > 4096) throw new Error("payload");
-      telegram.sendData(text);
-      return;
-    } catch {
-      // Кнопка клавиатуры не приняла sendData — уходим в deep link.
-    }
-  }
-  const start = buildStartParam(stats);
-  telegram.openTelegramLink(`https://t.me/mihmakbot?start=${start}`);
-  closeTimer = window.setTimeout(() => {
-    closeTimer = 0;
-    try {
-      telegram.close();
-    } catch {
-      // Закрытие мини-приложения необязательно, если клиент его не поддерживает.
-    }
-  }, 300);
-}
-
 function openShop(from) {
   shopReturn = from;
   startEl.classList.add("hidden");
@@ -388,6 +436,57 @@ function closeShop() {
   shopEl.classList.add("hidden");
   if (shopReturn === "over") overEl.classList.remove("hidden");
   else startEl.classList.remove("hidden");
+}
+
+function openBoard(from) {
+  boardReturn = from;
+  startEl.classList.add("hidden");
+  overEl.classList.add("hidden");
+  shopEl.classList.add("hidden");
+  boardEl.classList.remove("hidden");
+  loadBoard(boardKind);
+}
+
+function closeBoard() {
+  boardEl.classList.add("hidden");
+  if (boardReturn === "over") overEl.classList.remove("hidden");
+  else startEl.classList.remove("hidden");
+}
+
+async function loadBoard(kind) {
+  boardKind = kind === "coins" ? "coins" : "score";
+  tabScoreEl.classList.toggle("active", boardKind === "score");
+  tabCoinsEl.classList.toggle("active", boardKind === "coins");
+  const token = ++boardToken;
+  boardListEl.replaceChildren();
+  boardPlayersEl.textContent = "—";
+  boardStatusEl.textContent = "Загрузка…";
+  boardStatusEl.classList.remove("hidden");
+  try {
+    const response = await fetch(`${API}/api/top?kind=${boardKind}`);
+    const data = await response.json();
+    if (token !== boardToken) return;
+    if (!response.ok || !data || data.ok !== true || !Array.isArray(data.top)) throw new Error("top");
+    boardPlayersEl.textContent = String(data.players);
+    boardStatusEl.classList.add("hidden");
+    const fragment = document.createDocumentFragment();
+    for (const row of data.top) {
+      const item = document.createElement("li");
+      const place = document.createElement("span");
+      const nick = document.createElement("span");
+      const value = document.createElement("b");
+      place.textContent = String(row.place);
+      nick.textContent = String(row.nick);
+      value.textContent = String(row.value);
+      item.append(place, nick, value);
+      fragment.append(item);
+    }
+    boardListEl.replaceChildren(fragment);
+  } catch {
+    if (token !== boardToken) return;
+    boardStatusEl.textContent = "⚠️ Не удалось загрузить";
+    boardStatusEl.classList.remove("hidden");
+  }
 }
 
 function renderShop() {

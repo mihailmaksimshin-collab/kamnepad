@@ -273,7 +273,8 @@ h2 {
 button.primary,
 button.secondary,
 button.ghost,
-button.buy {
+button.buy,
+button.tab {
   appearance: none;
   border-radius: 14px;
   cursor: pointer;
@@ -373,6 +374,85 @@ button:disabled {
   color: var(--yellow);
   font-size: 15px;
   font-weight: 800;
+}
+
+.saving.warn {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.board-title {
+  color: var(--yellow-soft);
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+button.tab {
+  flex: 1;
+  margin-top: 0;
+  min-width: 0;
+  padding: 10px 8px;
+  font-size: 15px;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid rgba(245, 197, 66, 0.4);
+  box-shadow: none;
+}
+
+button.tab.active {
+  background: linear-gradient(180deg, #ffd76a, var(--yellow));
+  color: var(--ink);
+  border-color: transparent;
+}
+
+.players {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.players b {
+  color: var(--text);
+}
+
+.board-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  max-height: 42vh;
+  overflow: auto;
+}
+
+.board-list li {
+  display: grid;
+  grid-template-columns: 2.4em minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  background: rgba(7, 12, 24, 0.45);
+  border-radius: 10px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.board-list span:first-child {
+  color: var(--yellow);
+  font-weight: 800;
+}
+
+.board-list span:nth-child(2) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-list b {
+  font-variant-numeric: tabular-nums;
 }
 
 .shop-balance {

@@ -61,6 +61,7 @@
           <p class="rules">Касание бьёт по площади — можно несколькими пальцами. Золотые клетки дают монеты для магазина. С 4-й волны летят быстрые дротики. Не заденьте красную черту.</p>
           <button id="play" class="primary" type="button">Играть</button>
           <button id="shop-start" class="secondary" type="button">🛒 Магазин</button>
+          <button id="board-start" class="secondary" type="button">🏆 Рейтинг</button>
         </div>
       </section>
       <section id="over" class="overlay hidden">
@@ -76,6 +77,20 @@
           <p id="save-hint" class="save-hint hidden">Открой игру кнопкой в боте</p>
           <button id="again" class="primary" type="button">Ещё раз</button>
           <button id="shop-over" class="secondary" type="button">🛒 Магазин</button>
+          <button id="board-over" class="secondary" type="button">🏆 Рейтинг</button>
+        </div>
+      </section>
+      <section id="board" class="overlay hidden">
+        <div class="card">
+          <h2 class="board-title">🏆 Рейтинг</h2>
+          <div class="tabs">
+            <button id="tab-score" class="tab active" type="button">Очки</button>
+            <button id="tab-coins" class="tab" type="button">Монеты</button>
+          </div>
+          <p class="players">Игроков: <b id="board-players">—</b></p>
+          <ol id="board-list" class="board-list"></ol>
+          <p id="board-status" class="save-hint hidden"></p>
+          <button id="board-close" class="ghost" type="button">Закрыть</button>
         </div>
       </section>
       <section id="shop" class="overlay hidden">
