@@ -11,9 +11,10 @@ import {
   WALL_UNLOCK_WAVE,
   LIGHTNING_COST,
   LIGHTNING_UNLOCK_WAVE,
+  VERSION,
   buildResultPayload,
   createGame,
-} from "./game.js";
+} from "./game.js?v=20261120a";
 
 const API = "https://mihmakbot.mihmak.workers.dev";
 
@@ -104,6 +105,7 @@ let lastTime = performance.now();
 
 bestEl.textContent = String(best);
 coinsEl.textContent = String(coins);
+document.querySelector("#version").textContent = `v${VERSION}`;
 initTelegram();
 lockGestures();
 resize();

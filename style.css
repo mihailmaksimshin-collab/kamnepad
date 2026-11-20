@@ -210,6 +210,18 @@ body {
   filter: grayscale(0.35);
 }
 
+.version {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  z-index: 4;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}
+
 .overlay {
   position: absolute;
   inset: 0;

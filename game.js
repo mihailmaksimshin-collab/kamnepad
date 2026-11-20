@@ -1,5 +1,8 @@
 // Логика «Камнепада»: сетка, камни, волны, монеты, бомба, кислота, дротики. Без DOM.
 
+// Единственная версия сборки. При изменении поднимите её и тот же токен ?v= в index.html и main.js. См. README.
+export const VERSION = "20261120a";
+
 export const COLS = 16;
 export const ROWS = 26;
 export const HIT_RADIUS = 1.9;
