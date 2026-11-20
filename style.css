@@ -273,8 +273,7 @@ h2 {
 button.primary,
 button.secondary,
 button.ghost,
-button.buy,
-button.tiny {
+button.buy {
   appearance: none;
   border-radius: 14px;
   cursor: pointer;
@@ -374,18 +373,6 @@ button:disabled {
   color: var(--yellow);
   font-size: 15px;
   font-weight: 800;
-}
-
-button.tiny {
-  margin-top: 8px;
-  min-width: 0;
-  padding: 8px 12px;
-  font-size: 14px;
-  line-height: 1.2;
-  background: transparent;
-  color: var(--text);
-  border: 1px solid rgba(245, 197, 66, 0.4);
-  box-shadow: none;
 }
 
 .shop-balance {

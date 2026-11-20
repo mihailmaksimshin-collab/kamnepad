@@ -56,7 +56,6 @@ const shopCoinsEl = document.querySelector("#shop-coins");
 const saveResultEl = document.querySelector("#save-result");
 const saveHintEl = document.querySelector("#save-hint");
 const savingEl = document.querySelector("#saving");
-const cancelSaveEl = document.querySelector("#cancel-save");
 
 const SHOP_ITEMS = [
   ["wall", WALL_COST, WALL_UNLOCK_WAVE],
@@ -115,7 +114,6 @@ bombBtn.addEventListener("pointerdown", (event) => onArmPointer(event, "bomb"));
 acidBtn.addEventListener("pointerdown", (event) => onArmPointer(event, "acid"));
 lightningBtn.addEventListener("pointerdown", (event) => onArmPointer(event, "lightning"));
 saveResultEl.addEventListener("click", sendResult);
-cancelSaveEl.addEventListener("click", skipAutoSaveAndReplay);
 
 canvas.addEventListener("pointerdown", (event) => {
   if (game.phase !== "playing") return;
@@ -172,7 +170,6 @@ function begin() {
   }
   saveStarted = false;
   savingEl.classList.add("hidden");
-  cancelSaveEl.classList.add("hidden");
   pointers.clear();
   drawingPointer = null;
   game.cancelWall();
@@ -322,7 +319,6 @@ function showGameOver() {
   saveResultEl.classList.toggle("hidden", !inside);
   saveHintEl.classList.toggle("hidden", inside);
   savingEl.classList.toggle("hidden", !inside);
-  cancelSaveEl.classList.toggle("hidden", !inside);
   overEl.classList.remove("hidden");
   haptic(runRecord ? "record" : "over");
   if (inside) {
@@ -340,11 +336,6 @@ function clearSaveTimer() {
   saveTimer = 0;
 }
 
-function skipAutoSaveAndReplay() {
-  if (saveStarted) return;
-  begin();
-}
-
 function telegramApp() {
   return window.Telegram && window.Telegram.WebApp;
 }
@@ -359,7 +350,6 @@ function sendResult() {
   if (!insideTelegram() || saveStarted) return;
   saveStarted = true;
   clearSaveTimer();
-  cancelSaveEl.classList.add("hidden");
   const stats = {
     score: game.score,
     wave: game.wave,
