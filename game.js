@@ -28,15 +28,32 @@ export const LIGHTNING_UNLOCK_WAVE = 7;
 
 export const DART_FROM_WAVE = 4;
 
-export function buildResultPayload(stats) {
-  const payload = {
-    t: "kp",
-    score: Math.max(0, Math.floor(Number(stats.score) || 0)),
-    wave: Math.max(0, Math.floor(Number(stats.wave) || 0)),
-    coins: Math.max(0, Math.floor(Number(stats.coins) || 0)),
-    best: Math.max(0, Math.floor(Number(stats.best) || 0)),
+function resultNumbers(stats) {
+  const cap = 99999999999999;
+  const number = (value) => Math.min(cap, Math.max(0, Math.floor(Number(value) || 0)));
+  return {
+    score: number(stats.score),
+    wave: number(stats.wave),
+    coins: number(stats.coins),
+    best: number(stats.best),
   };
-  return JSON.stringify(payload);
+}
+
+export function buildResultPayload(stats) {
+  const values = resultNumbers(stats);
+  return JSON.stringify({
+    t: "kp",
+    score: values.score,
+    wave: values.wave,
+    coins: values.coins,
+    best: values.best,
+  });
+}
+
+export function buildStartParam(stats) {
+  const values = resultNumbers(stats);
+  const text = `kp_${values.score}_${values.wave}_${values.coins}_${values.best}`;
+  return text.length <= 64 ? text : text.slice(0, 64);
 }
 
 export function cellsAlong(x0, y0, x1, y1) {

@@ -12,6 +12,7 @@ import {
   LIGHTNING_COST,
   LIGHTNING_UNLOCK_WAVE,
   buildResultPayload,
+  buildStartParam,
   createGame,
 } from "./game.js";
 
@@ -303,33 +304,46 @@ function showGameOver() {
   overWaveEl.textContent = String(game.wave);
   overBestEl.textContent = String(best);
   recordEl.classList.toggle("hidden", !runRecord);
-  const canSend = canSendToBot();
-  saveResultEl.classList.toggle("hidden", !canSend);
-  saveHintEl.classList.toggle("hidden", canSend);
+  const inside = insideTelegram();
+  saveResultEl.classList.toggle("hidden", !inside);
+  saveHintEl.classList.toggle("hidden", inside);
   overEl.classList.remove("hidden");
   haptic(runRecord ? "record" : "over");
 }
 
-function canSendToBot() {
-  const telegram = window.Telegram && window.Telegram.WebApp;
-  if (!telegram || typeof telegram.sendData !== "function") return false;
-  return typeof telegram.initData === "string" && telegram.initData.length > 0;
+function telegramApp() {
+  return window.Telegram && window.Telegram.WebApp;
+}
+
+function insideTelegram() {
+  const telegram = telegramApp();
+  return Boolean(telegram) && telegram.platform !== "unknown";
 }
 
 function sendResult() {
-  const text = buildResultPayload({
-    score: game.score,
-    wave: game.wave,
-    coins,
-    best,
-  });
-  try {
-    if (!canSendToBot() || text.length > 4096) throw new Error("sendData unavailable");
-    window.Telegram.WebApp.sendData(text);
-  } catch {
-    saveResultEl.classList.add("hidden");
-    saveHintEl.classList.remove("hidden");
+  const telegram = telegramApp();
+  if (!insideTelegram()) return;
+  const stats = { score: game.score, wave: game.wave, coins, best };
+  const initData = typeof telegram.initData === "string" ? telegram.initData : "";
+  if (initData.length === 0 && typeof telegram.sendData === "function") {
+    try {
+      const text = buildResultPayload(stats);
+      if (text.length > 4096) throw new Error("payload");
+      telegram.sendData(text);
+      return;
+    } catch {
+      // Кнопка клавиатуры не приняла sendData — уходим в deep link.
+    }
   }
+  const start = buildStartParam(stats);
+  telegram.openTelegramLink(`https://t.me/mihmakbot?start=${start}`);
+  window.setTimeout(() => {
+    try {
+      telegram.close();
+    } catch {
+      // Закрытие мини-приложения необязательно, если клиент его не поддерживает.
+    }
+  }, 300);
 }
 
 function openShop(from) {
