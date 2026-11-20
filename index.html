@@ -36,6 +36,10 @@
       <div id="ability-layer" class="hidden">
         <p id="arm-hint" class="hidden">Нажмите на поле</p>
         <div id="abilities">
+          <button type="button" id="arm-wall" class="ability" data-kind="wall" aria-label="Забор">
+            <span class="ability-icon">🧱</span>
+            <span class="ability-count" id="wall-count">0</span>
+          </button>
           <button type="button" id="arm-bomb" class="ability" data-kind="bomb" aria-label="Бомба">
             <span class="ability-icon">💣</span>
             <span class="ability-count" id="bomb-count">0</span>
@@ -43,6 +47,10 @@
           <button type="button" id="arm-acid" class="ability" data-kind="acid" aria-label="Кислота">
             <span class="ability-icon">🧪</span>
             <span class="ability-count" id="acid-count">0</span>
+          </button>
+          <button type="button" id="arm-lightning" class="ability" data-kind="lightning" aria-label="Молния">
+            <span class="ability-icon">⚡</span>
+            <span class="ability-count" id="lightning-count">0</span>
           </button>
         </div>
       </div>
@@ -64,6 +72,8 @@
             <li><span>Рекорд</span><b id="over-best">0</b></li>
           </ul>
           <p id="record" class="record hidden">🏆 Новый рекорд!</p>
+          <button id="save-result" class="secondary hidden" type="button">🏆 Сохранить результат</button>
+          <p id="save-hint" class="save-hint hidden">Открой игру кнопкой в боте</p>
           <button id="again" class="primary" type="button">Ещё раз</button>
           <button id="shop-over" class="secondary" type="button">🛒 Магазин</button>
         </div>
@@ -72,6 +82,14 @@
         <div class="card shop-card">
           <h2>🛒 Магазин</h2>
           <p class="shop-balance">Монеты: <b id="shop-coins">0</b></p>
+          <article class="item" id="item-wall">
+            <h3>🧱 Забор</h3>
+            <p>Нарисуйте стену до 8 клеток. Камни зависают над ней 4 секунды.</p>
+            <p class="price">5 🪙</p>
+            <p class="stock">В запасе: <b id="stock-wall">0</b></p>
+            <p class="lock hidden" id="lock-wall">Нужна волна 2</p>
+            <button type="button" class="buy" id="buy-wall">Купить за 5</button>
+          </article>
           <article class="item" id="item-bomb">
             <h3>💣 Бомба</h3>
             <p>Взрыв радиусом 4 клетки. Сильный урон.</p>
@@ -87,6 +105,14 @@
             <p class="stock">В запасе: <b id="stock-acid">0</b></p>
             <p class="lock hidden" id="lock-acid">Нужна волна 5</p>
             <button type="button" class="buy" id="buy-acid">Купить за 25</button>
+          </article>
+          <article class="item" id="item-lightning">
+            <h3>⚡ Молния</h3>
+            <p>Один удар по всему полю: молнии бьют во все камни.</p>
+            <p class="price">60 🪙</p>
+            <p class="stock">В запасе: <b id="stock-lightning">0</b></p>
+            <p class="lock hidden" id="lock-lightning">Нужна волна 7</p>
+            <button type="button" class="buy" id="buy-lightning">Купить за 60</button>
           </article>
           <button type="button" class="ghost" id="shop-close">Закрыть</button>
         </div>

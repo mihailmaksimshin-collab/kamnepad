@@ -136,7 +136,8 @@ body {
 
 #abilities {
   display: flex;
-  gap: 10px;
+  gap: 6px;
+  max-width: calc(100vw - 24px);
 }
 
 #arm-hint {
@@ -153,8 +154,8 @@ body {
 .ability {
   pointer-events: auto;
   cursor: pointer;
-  width: 62px;
-  height: 62px;
+  width: 50px;
+  height: 56px;
   min-width: 0;
   margin: 0;
   padding: 4px 0 3px;
@@ -171,7 +172,7 @@ body {
 }
 
 .ability-icon {
-  font-size: 24px;
+  font-size: 20px;
   line-height: 1;
 }
 
@@ -191,6 +192,16 @@ body {
 .ability.armed[data-kind="acid"] {
   transform: translateY(-2px);
   box-shadow: 0 0 0 3px #fff, 0 0 16px #7dff6a, 0 4px 0 #8d6a10;
+}
+
+.ability.armed[data-kind="wall"] {
+  transform: translateY(-2px);
+  box-shadow: 0 0 0 3px #fff, 0 0 16px #c5d0e0, 0 4px 0 #8d6a10;
+}
+
+.ability.armed[data-kind="lightning"] {
+  transform: translateY(-2px);
+  box-shadow: 0 0 0 3px #fff, 0 0 16px #8ec5ff, 0 4px 0 #8d6a10;
 }
 
 .ability:disabled {
@@ -349,6 +360,14 @@ button:disabled {
   font-weight: 800;
 }
 
+.save-hint {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
 .shop-balance {
   margin: 10px 0 0;
   color: var(--muted);
@@ -413,7 +432,8 @@ button.buy {
   .rules { margin-top: 8px; font-size: 14px; }
   button.primary { margin-top: 10px; padding: 11px 22px; }
   .item { margin-top: 8px; padding: 8px 10px; }
-  .ability { width: 54px; height: 54px; }
+  .ability { width: 46px; height: 50px; }
+  .ability-icon { font-size: 18px; }
 }
 
 @media (min-width: 720px) {

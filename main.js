@@ -7,6 +7,11 @@ import {
   BOMB_UNLOCK_WAVE,
   ACID_COST,
   ACID_UNLOCK_WAVE,
+  WALL_COST,
+  WALL_UNLOCK_WAVE,
+  LIGHTNING_COST,
+  LIGHTNING_UNLOCK_WAVE,
+  buildResultPayload,
   createGame,
 } from "./game.js";
 
@@ -16,6 +21,8 @@ const STORAGE = {
   coins: "kamnepad-coins",
   bombs: "kamnepad-bombs",
   acid: "kamnepad-acid",
+  walls: "kamnepad-walls",
+  lightning: "kamnepad-lightning",
 };
 const HIT_COOLDOWN_MS = 90;
 
@@ -36,17 +43,30 @@ const overBestEl = document.querySelector("#over-best");
 const abilityLayer = document.querySelector("#ability-layer");
 const abilitiesEl = document.querySelector("#abilities");
 const armHint = document.querySelector("#arm-hint");
+const wallBtn = document.querySelector("#arm-wall");
 const bombBtn = document.querySelector("#arm-bomb");
 const acidBtn = document.querySelector("#arm-acid");
+const lightningBtn = document.querySelector("#arm-lightning");
+const wallCountEl = document.querySelector("#wall-count");
 const bombCountEl = document.querySelector("#bomb-count");
 const acidCountEl = document.querySelector("#acid-count");
+const lightningCountEl = document.querySelector("#lightning-count");
 const shopCoinsEl = document.querySelector("#shop-coins");
-const stockBombEl = document.querySelector("#stock-bomb");
-const stockAcidEl = document.querySelector("#stock-acid");
-const lockBombEl = document.querySelector("#lock-bomb");
-const lockAcidEl = document.querySelector("#lock-acid");
-const buyBombEl = document.querySelector("#buy-bomb");
-const buyAcidEl = document.querySelector("#buy-acid");
+const saveResultEl = document.querySelector("#save-result");
+const saveHintEl = document.querySelector("#save-hint");
+
+const SHOP_ITEMS = [
+  ["wall", WALL_COST, WALL_UNLOCK_WAVE],
+  ["bomb", BOMB_COST, BOMB_UNLOCK_WAVE],
+  ["acid", ACID_COST, ACID_UNLOCK_WAVE],
+  ["lightning", LIGHTNING_COST, LIGHTNING_UNLOCK_WAVE],
+];
+const HINTS = {
+  wall: "Ведите пальцем, до 8 клеток",
+  bomb: "Куда бросить бомбу?",
+  acid: "Куда вылить кислоту?",
+  lightning: "Куда ударить молнией?",
+};
 
 const game = createGame();
 const pointers = new Map();
@@ -57,7 +77,10 @@ let bestWave = readNumber(STORAGE.bestWave);
 let coins = readNumber(STORAGE.coins);
 let bombs = readNumber(STORAGE.bombs);
 let acid = readNumber(STORAGE.acid);
+let walls = readNumber(STORAGE.walls);
+let lightning = readNumber(STORAGE.lightning);
 let armed = null;
+let drawingPointer = null;
 let shopReturn = "start";
 let runRecord = false;
 let overShown = false;
@@ -78,10 +101,14 @@ document.querySelector("#again").addEventListener("click", begin);
 document.querySelector("#shop-start").addEventListener("click", () => openShop("start"));
 document.querySelector("#shop-over").addEventListener("click", () => openShop("over"));
 document.querySelector("#shop-close").addEventListener("click", closeShop);
-buyBombEl.addEventListener("click", () => buy("bomb"));
-buyAcidEl.addEventListener("click", () => buy("acid"));
+for (const [kind] of SHOP_ITEMS) {
+  document.querySelector(`#buy-${kind}`).addEventListener("click", () => buy(kind));
+}
+wallBtn.addEventListener("pointerdown", (event) => onArmPointer(event, "wall"));
 bombBtn.addEventListener("pointerdown", (event) => onArmPointer(event, "bomb"));
 acidBtn.addEventListener("pointerdown", (event) => onArmPointer(event, "acid"));
+lightningBtn.addEventListener("pointerdown", (event) => onArmPointer(event, "lightning"));
+saveResultEl.addEventListener("click", sendResult);
 
 canvas.addEventListener("pointerdown", (event) => {
   if (game.phase !== "playing") return;
@@ -92,12 +119,22 @@ canvas.addEventListener("pointerdown", (event) => {
     // У синтетического или уже отпущенного указателя нет захвата, удар всё равно засчитывается.
   }
   const point = cellFromEvent(event);
-  if (armed) {
+  if (armed === "wall") {
+    if (drawingPointer == null) {
+      drawingPointer = event.pointerId;
+      game.beginWall();
+    }
+    if (event.pointerId === drawingPointer) {
+      game.extendWall(point.x, point.y);
+      pointers.set(event.pointerId, { x: point.x, y: point.y, last: Infinity, placed: true, drawing: true });
+      return;
+    }
+  } else if (armed) {
     useArmed(point);
-    pointers.set(event.pointerId, { x: point.x, y: point.y, last: Infinity, placed: true });
+    pointers.set(event.pointerId, { x: point.x, y: point.y, last: Infinity, placed: true, drawing: false });
     return;
   }
-  pointers.set(event.pointerId, { x: point.x, y: point.y, last: 0, placed: false });
+  pointers.set(event.pointerId, { x: point.x, y: point.y, last: 0, placed: false, drawing: false });
   strike(event.pointerId);
 });
 
@@ -108,20 +145,22 @@ canvas.addEventListener("pointermove", (event) => {
   const point = cellFromEvent(event);
   pointer.x = point.x;
   pointer.y = point.y;
+  if (pointer.drawing) {
+    game.extendWall(point.x, point.y);
+    return;
+  }
   if (pointer.placed) return;
   if (performance.now() - pointer.last >= HIT_COOLDOWN_MS) strike(event.pointerId);
 });
 
-canvas.addEventListener("pointerup", (event) => {
-  pointers.delete(event.pointerId);
-});
-canvas.addEventListener("pointercancel", (event) => {
-  pointers.delete(event.pointerId);
-});
+canvas.addEventListener("pointerup", (event) => finishPointer(event.pointerId));
+canvas.addEventListener("pointercancel", (event) => finishPointer(event.pointerId));
 canvas.addEventListener("contextmenu", (event) => event.preventDefault());
 
 function begin() {
   pointers.clear();
+  drawingPointer = null;
+  game.cancelWall();
   armed = null;
   runRecord = false;
   overShown = false;
@@ -135,14 +174,51 @@ function begin() {
   syncHud();
 }
 
+function finishPointer(id) {
+  const pointer = pointers.get(id);
+  if (pointer && pointer.drawing && id === drawingPointer) {
+    if (walls > 0 && game.draftWall && game.draftWall.cells.length > 0) {
+      game.commitWall();
+      walls -= 1;
+      saveStock();
+      haptic("wall");
+    } else {
+      game.cancelWall();
+    }
+    armed = null;
+    drawingPointer = null;
+    syncAbilityButtons();
+  }
+  pointers.delete(id);
+}
+
 function onArmPointer(event, kind) {
   event.preventDefault();
   event.stopPropagation();
   if (game.phase !== "playing") return;
-  const stock = kind === "bomb" ? bombs : acid;
-  if (stock <= 0) return;
-  armed = armed === kind ? null : kind;
+  if (armed === kind) {
+    if (kind === "wall") {
+      game.cancelWall();
+      drawingPointer = null;
+    }
+    armed = null;
+    syncAbilityButtons();
+    return;
+  }
+  if (stockOf(kind) <= 0) return;
+  if (armed === "wall") {
+    game.cancelWall();
+    drawingPointer = null;
+  }
+  armed = kind;
   syncAbilityButtons();
+}
+
+function stockOf(kind) {
+  if (kind === "wall") return walls;
+  if (kind === "bomb") return bombs;
+  if (kind === "acid") return acid;
+  return lightning;
 }
 
 function useArmed(point) {
@@ -154,6 +230,10 @@ function useArmed(point) {
     acid -= 1;
     game.pourAcid(point.x, point.y);
     haptic("acid");
+  } else if (armed === "lightning" && lightning > 0) {
+    lightning -= 1;
+    game.strikeLightning(point.x, point.y);
+    haptic("lightning");
   }
   armed = null;
   saveStock();
@@ -215,6 +295,7 @@ function showGameOver() {
   if (overShown) return;
   overShown = true;
   pointers.clear();
+  drawingPointer = null;
   armed = null;
   syncAbilityButtons();
   abilityLayer.classList.add("hidden");
@@ -222,8 +303,33 @@ function showGameOver() {
   overWaveEl.textContent = String(game.wave);
   overBestEl.textContent = String(best);
   recordEl.classList.toggle("hidden", !runRecord);
+  const canSend = canSendToBot();
+  saveResultEl.classList.toggle("hidden", !canSend);
+  saveHintEl.classList.toggle("hidden", canSend);
   overEl.classList.remove("hidden");
   haptic(runRecord ? "record" : "over");
+}
+
+function canSendToBot() {
+  const telegram = window.Telegram && window.Telegram.WebApp;
+  if (!telegram || typeof telegram.sendData !== "function") return false;
+  return typeof telegram.initData === "string" && telegram.initData.length > 0;
+}
+
+function sendResult() {
+  const text = buildResultPayload({
+    score: game.score,
+    wave: game.wave,
+    coins,
+    best,
+  });
+  try {
+    if (!canSendToBot() || text.length > 4096) throw new Error("sendData unavailable");
+    window.Telegram.WebApp.sendData(text);
+  } catch {
+    saveResultEl.classList.add("hidden");
+    saveHintEl.classList.remove("hidden");
+  }
 }
 
 function openShop(from) {
@@ -241,28 +347,28 @@ function closeShop() {
 }
 
 function renderShop() {
-  const bombLocked = bestWave < BOMB_UNLOCK_WAVE;
-  const acidLocked = bestWave < ACID_UNLOCK_WAVE;
   shopCoinsEl.textContent = String(coins);
-  stockBombEl.textContent = String(bombs);
-  stockAcidEl.textContent = String(acid);
-  lockBombEl.classList.toggle("hidden", !bombLocked);
-  lockAcidEl.classList.toggle("hidden", !acidLocked);
-  buyBombEl.classList.toggle("hidden", bombLocked);
-  buyAcidEl.classList.toggle("hidden", acidLocked);
-  buyBombEl.disabled = coins < BOMB_COST;
-  buyAcidEl.disabled = coins < ACID_COST;
-  document.querySelector("#item-bomb").classList.toggle("locked", bombLocked);
-  document.querySelector("#item-acid").classList.toggle("locked", acidLocked);
+  for (const [kind, cost, unlock] of SHOP_ITEMS) {
+    const locked = bestWave < unlock;
+    document.querySelector(`#stock-${kind}`).textContent = String(stockOf(kind));
+    document.querySelector(`#lock-${kind}`).classList.toggle("hidden", !locked);
+    const buyButton = document.querySelector(`#buy-${kind}`);
+    buyButton.classList.toggle("hidden", locked);
+    buyButton.disabled = coins < cost;
+    document.querySelector(`#item-${kind}`).classList.toggle("locked", locked);
+  }
 }
 
 function buy(kind) {
-  const locked = kind === "bomb" ? bestWave < BOMB_UNLOCK_WAVE : bestWave < ACID_UNLOCK_WAVE;
-  const cost = kind === "bomb" ? BOMB_COST : ACID_COST;
-  if (locked || coins < cost) return;
+  const item = SHOP_ITEMS.find(([name]) => name === kind);
+  if (!item) return;
+  const [, cost, unlock] = item;
+  if (bestWave < unlock || coins < cost) return;
   coins -= cost;
-  if (kind === "bomb") bombs += 1;
-  else acid += 1;
+  if (kind === "wall") walls += 1;
+  else if (kind === "bomb") bombs += 1;
+  else if (kind === "acid") acid += 1;
+  else lightning += 1;
   saveStock();
   coinsEl.textContent = String(coins);
   syncAbilityButtons();
@@ -270,16 +376,19 @@ function buy(kind) {
 }
 
 function syncAbilityButtons() {
-  bombCountEl.textContent = String(bombs);
-  acidCountEl.textContent = String(acid);
-  bombBtn.disabled = bombs <= 0;
-  acidBtn.disabled = acid <= 0;
-  bombBtn.classList.toggle("armed", armed === "bomb");
-  acidBtn.classList.toggle("armed", armed === "acid");
-  bombBtn.setAttribute("aria-pressed", armed === "bomb" ? "true" : "false");
-  acidBtn.setAttribute("aria-pressed", armed === "acid" ? "true" : "false");
-  const hint = armed === "bomb" ? "Куда бросить бомбу?" : armed === "acid" ? "Куда вылить кислоту?" : "";
-  armHint.textContent = hint;
+  const buttons = [
+    [wallBtn, wallCountEl, "wall", walls],
+    [bombBtn, bombCountEl, "bomb", bombs],
+    [acidBtn, acidCountEl, "acid", acid],
+    [lightningBtn, lightningCountEl, "lightning", lightning],
+  ];
+  for (const [button, countEl, kind, stock] of buttons) {
+    countEl.textContent = String(stock);
+    button.disabled = stock <= 0;
+    button.classList.toggle("armed", armed === kind);
+    button.setAttribute("aria-pressed", armed === kind ? "true" : "false");
+  }
+  armHint.textContent = HINTS[armed] || "";
   armHint.classList.toggle("hidden", !armed);
   if (!abilityLayer.classList.contains("hidden")) placeAbilities();
 }
@@ -350,10 +459,12 @@ function render() {
   ctx.fillRect(0, lineY, COLS * cell, ROWS * cell - lineY);
 
   drawPuddles(cell);
+  drawWalls(cell);
   for (const stone of game.stones) drawStone(stone, cell);
   drawParticles(cell);
   drawFloaters(cell);
   drawShockwaves(cell);
+  drawLightning(cell);
 
   ctx.shadowColor = "#ff2d3a";
   ctx.shadowBlur = 14;
@@ -367,6 +478,70 @@ function render() {
 
   drawRings(cell);
   ctx.restore();
+}
+
+function drawWalls(cell) {
+  const layers = [];
+  if (game.draftWall && game.draftWall.cells.length) {
+    layers.push({ cells: game.draftWall.cells, alpha: 1, draft: true });
+  }
+  for (const wall of game.walls) {
+    layers.push({
+      cells: wall.cells,
+      alpha: Math.max(0, wall.life / wall.maxLife),
+      draft: false,
+    });
+  }
+  const gap = Math.max(1, cell * 0.08);
+  const size = cell - gap;
+  for (const layer of layers) {
+    ctx.globalAlpha = layer.alpha;
+    for (const block of layer.cells) {
+      const x = block.x * cell + gap / 2;
+      const y = block.y * cell + gap / 2;
+      ctx.fillStyle = "#8b95a8";
+      ctx.fillRect(x, y, size, size);
+      ctx.fillStyle = "rgba(255,255,255,0.38)";
+      ctx.fillRect(x, y, size, Math.max(2, size * 0.22));
+      ctx.fillStyle = "rgba(40, 48, 64, 0.35)";
+      ctx.fillRect(x, y + size * 0.48, size, Math.max(1, size * 0.08));
+      ctx.strokeStyle = layer.draft ? "#ffe08a" : "#4e5868";
+      ctx.lineWidth = layer.draft ? 2 : 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawLightning(cell) {
+  if (game.flash > 0) {
+    ctx.fillStyle = `rgba(214, 232, 255, ${Math.min(0.62, game.flash * 1.8)})`;
+    ctx.fillRect(0, 0, COLS * cell, ROWS * cell);
+  }
+  for (const bolt of game.bolts) {
+    const alpha = Math.max(0, bolt.life / bolt.maxLife);
+    const paths = [bolt.points, ...(bolt.forks || [])];
+    for (const points of paths) {
+      traceBolt(points, cell);
+      ctx.strokeStyle = `rgba(150, 200, 255, ${0.45 * alpha})`;
+      ctx.lineWidth = Math.max(3, cell * 0.34);
+      ctx.stroke();
+      ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+      ctx.lineWidth = Math.max(1.4, cell * 0.08);
+      ctx.stroke();
+    }
+  }
+}
+
+function traceBolt(points, cell) {
+  if (!points || points.length < 2) return;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  ctx.moveTo(points[0].x * cell, points[0].y * cell);
+  for (let index = 1; index < points.length; index += 1) {
+    ctx.lineTo(points[index].x * cell, points[index].y * cell);
+  }
 }
 
 function drawPuddles(cell) {
@@ -575,6 +750,8 @@ function saveStock() {
   writeNumber(STORAGE.coins, coins);
   writeNumber(STORAGE.bombs, bombs);
   writeNumber(STORAGE.acid, acid);
+  writeNumber(STORAGE.walls, walls);
+  writeNumber(STORAGE.lightning, lightning);
 }
 
 function initTelegram() {
@@ -597,7 +774,8 @@ function haptic(kind) {
   try {
     if (kind === "hit") feedback.impactOccurred("light");
     else if (kind === "break" || kind === "acid") feedback.impactOccurred("medium");
-    else if (kind === "bomb") feedback.impactOccurred("heavy");
+    else if (kind === "bomb" || kind === "lightning") feedback.impactOccurred("heavy");
+    else if (kind === "wall") feedback.impactOccurred("light");
     else if (kind === "record") feedback.notificationOccurred("success");
     else feedback.notificationOccurred("error");
   } catch {
