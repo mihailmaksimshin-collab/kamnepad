@@ -80,19 +80,6 @@
           <button id="board-over" class="secondary" type="button">🏆 Рейтинг</button>
         </div>
       </section>
-      <section id="board" class="overlay hidden">
-        <div class="card">
-          <h2 class="board-title">🏆 Рейтинг</h2>
-          <div class="tabs">
-            <button id="tab-score" class="tab active" type="button">Очки</button>
-            <button id="tab-coins" class="tab" type="button">Монеты</button>
-          </div>
-          <p class="players">Игроков: <b id="board-players">—</b></p>
-          <ol id="board-list" class="board-list"></ol>
-          <p id="board-status" class="save-hint hidden"></p>
-          <button id="board-close" class="ghost" type="button">Закрыть</button>
-        </div>
-      </section>
       <section id="shop" class="overlay hidden">
         <div class="card shop-card">
           <h2>🛒 Магазин</h2>
@@ -133,6 +120,31 @@
         </div>
       </section>
     </div>
+    <section id="rating" class="overlay rating-modal hidden" aria-modal="true" aria-labelledby="rating-title">
+      <div class="card rating-card">
+        <button id="rating-close" class="icon-close" type="button" aria-label="Закрыть">✖</button>
+        <h2 id="rating-title" class="board-title">🏆 Топ-10</h2>
+        <div class="tabs" role="tablist">
+          <button id="tab-score" class="tab active" type="button">Очки</button>
+          <button id="tab-coins" class="tab" type="button">Монеты</button>
+        </div>
+        <p class="players">Игроков: <b id="rating-players">—</b></p>
+        <p id="rating-status" class="rating-status">Загружаю…</p>
+        <div class="table-wrap">
+          <table class="rating-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Игрок</th>
+                <th id="rating-value-label">Очки</th>
+              </tr>
+            </thead>
+            <tbody id="rating-body"></tbody>
+          </table>
+        </div>
+        <button id="rating-retry" class="secondary hidden" type="button">Повторить</button>
+      </div>
+    </section>
   </div>
   <script type="module" src="main.js"></script>
 </body>

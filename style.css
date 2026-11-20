@@ -37,6 +37,7 @@ body {
 }
 
 #app {
+  position: relative;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -381,7 +382,98 @@ button:disabled {
   font-weight: 700;
 }
 
+.rating-modal {
+  z-index: 40;
+  background: rgba(6, 10, 20, 0.82);
+}
+
+.rating-card {
+  position: relative;
+  padding-top: 28px;
+}
+
 .board-title {
+  color: var(--yellow-soft);
+}
+
+button.icon-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid rgba(245, 197, 66, 0.45);
+  background: rgba(8, 12, 24, 0.72);
+  color: var(--yellow-soft);
+  font-size: 18px;
+  line-height: 1;
+  box-shadow: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.rating-status {
+  margin: 14px 0 0;
+  color: var(--yellow-soft);
+  font-weight: 800;
+}
+
+.table-wrap {
+  max-height: 46vh;
+  margin-top: 8px;
+  overflow: auto;
+}
+
+.rating-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rating-table th {
+  padding: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  border-bottom: 1px solid rgba(245, 197, 66, 0.28);
+}
+
+.rating-table th:last-child,
+.rating-table td.value {
+  text-align: right;
+}
+
+.rating-table td {
+  padding: 9px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  text-align: left;
+}
+
+.rating-table td.place {
+  width: 2.6em;
+  font-weight: 800;
+  text-align: center;
+}
+
+.rating-table td.nick {
+  max-width: 42vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rating-table td.value {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.rating-table tr.me td {
+  background: rgba(245, 197, 66, 0.18);
   color: var(--yellow-soft);
 }
 
@@ -417,42 +509,6 @@ button.tab.active {
 
 .players b {
   color: var(--text);
-}
-
-.board-list {
-  list-style: none;
-  margin: 10px 0 0;
-  padding: 0;
-  display: grid;
-  gap: 6px;
-  max-height: 42vh;
-  overflow: auto;
-}
-
-.board-list li {
-  display: grid;
-  grid-template-columns: 2.4em minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-  background: rgba(7, 12, 24, 0.45);
-  border-radius: 10px;
-  padding: 8px 10px;
-  text-align: left;
-}
-
-.board-list span:first-child {
-  color: var(--yellow);
-  font-weight: 800;
-}
-
-.board-list span:nth-child(2) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.board-list b {
-  font-variant-numeric: tabular-nums;
 }
 
 .shop-balance {

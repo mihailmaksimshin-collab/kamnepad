@@ -56,12 +56,15 @@ const lightningCountEl = document.querySelector("#lightning-count");
 const shopCoinsEl = document.querySelector("#shop-coins");
 const saveHintEl = document.querySelector("#save-hint");
 const savingEl = document.querySelector("#saving");
-const boardEl = document.querySelector("#board");
-const boardListEl = document.querySelector("#board-list");
-const boardPlayersEl = document.querySelector("#board-players");
-const boardStatusEl = document.querySelector("#board-status");
+const ratingEl = document.querySelector("#rating");
+const ratingBodyEl = document.querySelector("#rating-body");
+const ratingPlayersEl = document.querySelector("#rating-players");
+const ratingStatusEl = document.querySelector("#rating-status");
+const ratingRetryEl = document.querySelector("#rating-retry");
+const ratingValueLabelEl = document.querySelector("#rating-value-label");
 const tabScoreEl = document.querySelector("#tab-score");
 const tabCoinsEl = document.querySelector("#tab-coins");
+const NICK_KEY = "kamnepad-nick";
 
 const SHOP_ITEMS = [
   ["wall", WALL_COST, WALL_UNLOCK_WAVE],
@@ -116,7 +119,8 @@ document.querySelector("#shop-over").addEventListener("click", () => openShop("o
 document.querySelector("#shop-close").addEventListener("click", closeShop);
 document.querySelector("#board-start").addEventListener("click", () => openBoard("start"));
 document.querySelector("#board-over").addEventListener("click", () => openBoard("over"));
-document.querySelector("#board-close").addEventListener("click", closeBoard);
+document.querySelector("#rating-close").addEventListener("click", closeBoard);
+ratingRetryEl.addEventListener("click", () => loadBoard(boardKind));
 tabScoreEl.addEventListener("click", () => loadBoard("score"));
 tabCoinsEl.addEventListener("click", () => loadBoard("coins"));
 for (const [kind] of SHOP_ITEMS) {
@@ -189,7 +193,7 @@ function begin() {
   startEl.classList.add("hidden");
   overEl.classList.add("hidden");
   shopEl.classList.add("hidden");
-  boardEl.classList.add("hidden");
+  ratingEl.classList.add("hidden");
   game.start();
   noteWave();
   syncAbilityButtons();
@@ -302,7 +306,12 @@ function syncHud() {
   bannerEl.classList.toggle("hidden", !showBanner);
   const playing = game.phase === "playing";
   abilityLayer.classList.toggle("hidden", !playing);
-  if (playing) placeAbilities();
+  if (playing) {
+    ratingEl.classList.add("hidden");
+    startEl.classList.add("hidden");
+    overEl.classList.add("hidden");
+    placeAbilities();
+  }
   if (game.phase === "over") showGameOver();
 }
 
@@ -376,6 +385,7 @@ async function submitScore(stats, generation, isRetry) {
     const data = await response.json().catch(() => null);
     if (generation !== saveGeneration) return;
     if (!response.ok || !data || data.ok !== true) throw new Error("save failed");
+    rememberNick(data.nick);
     savingEl.textContent = `✅ Сохранено: ${data.nick}, рекорд ${data.best}, место #${data.place}`;
     savingEl.classList.remove("warn");
   } catch {
@@ -439,53 +449,96 @@ function closeShop() {
 }
 
 function openBoard(from) {
-  boardReturn = from;
+  if (game.phase === "playing") return;
+  boardReturn = from === "over" ? "over" : "start";
   startEl.classList.add("hidden");
   overEl.classList.add("hidden");
   shopEl.classList.add("hidden");
-  boardEl.classList.remove("hidden");
+  ratingEl.classList.remove("hidden");
   loadBoard(boardKind);
 }
 
 function closeBoard() {
-  boardEl.classList.add("hidden");
+  ratingEl.classList.add("hidden");
+  if (game.phase === "playing") return;
   if (boardReturn === "over") overEl.classList.remove("hidden");
   else startEl.classList.remove("hidden");
+}
+
+function placeMark(place) {
+  if (place === 1) return "🥇";
+  if (place === 2) return "🥈";
+  if (place === 3) return "🥉";
+  return String(place);
+}
+
+function rememberNick(nick) {
+  if (typeof nick !== "string" || nick.length === 0) return;
+  try {
+    localStorage.setItem(NICK_KEY, nick);
+  } catch {
+    // Ник останется только до перезагрузки, если хранилище недоступно.
+  }
+}
+
+function storedNick() {
+  try {
+    return localStorage.getItem(NICK_KEY) || "";
+  } catch {
+    return "";
+  }
 }
 
 async function loadBoard(kind) {
   boardKind = kind === "coins" ? "coins" : "score";
   tabScoreEl.classList.toggle("active", boardKind === "score");
   tabCoinsEl.classList.toggle("active", boardKind === "coins");
+  ratingValueLabelEl.textContent = boardKind === "coins" ? "Монеты" : "Очки";
   const token = ++boardToken;
-  boardListEl.replaceChildren();
-  boardPlayersEl.textContent = "—";
-  boardStatusEl.textContent = "Загрузка…";
-  boardStatusEl.classList.remove("hidden");
+  ratingBodyEl.replaceChildren();
+  ratingPlayersEl.textContent = "—";
+  ratingStatusEl.textContent = "Загружаю…";
+  ratingStatusEl.classList.remove("hidden");
+  ratingRetryEl.classList.add("hidden");
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 8000);
   try {
-    const response = await fetch(`${API}/api/top?kind=${boardKind}`);
+    const response = await fetch(`${API}/api/top?kind=${boardKind}`, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
     const data = await response.json();
     if (token !== boardToken) return;
     if (!response.ok || !data || data.ok !== true || !Array.isArray(data.top)) throw new Error("top");
-    boardPlayersEl.textContent = String(data.players);
-    boardStatusEl.classList.add("hidden");
+    ratingPlayersEl.textContent = String(data.players);
+    ratingStatusEl.classList.add("hidden");
+    const mine = storedNick();
     const fragment = document.createDocumentFragment();
-    for (const row of data.top) {
-      const item = document.createElement("li");
-      const place = document.createElement("span");
-      const nick = document.createElement("span");
-      const value = document.createElement("b");
-      place.textContent = String(row.place);
+    for (const row of data.top.slice(0, 10)) {
+      const item = document.createElement("tr");
+      if (mine && row.nick === mine) item.classList.add("me");
+      const place = document.createElement("td");
+      const nick = document.createElement("td");
+      const value = document.createElement("td");
+      place.className = "place";
+      nick.className = "nick";
+      value.className = "value";
+      const numericPlace = Number(row.place);
+      place.textContent = placeMark(Number.isFinite(numericPlace) ? numericPlace : row.place);
       nick.textContent = String(row.nick);
       value.textContent = String(row.value);
       item.append(place, nick, value);
       fragment.append(item);
     }
-    boardListEl.replaceChildren(fragment);
+    ratingBodyEl.replaceChildren(fragment);
   } catch {
     if (token !== boardToken) return;
-    boardStatusEl.textContent = "⚠️ Не удалось загрузить";
-    boardStatusEl.classList.remove("hidden");
+    ratingBodyEl.replaceChildren();
+    ratingStatusEl.textContent = "⚠️ Не удалось загрузить";
+    ratingStatusEl.classList.remove("hidden");
+    ratingRetryEl.classList.remove("hidden");
+  } finally {
+    window.clearTimeout(timer);
   }
 }
 
