@@ -55,6 +55,8 @@ const lightningCountEl = document.querySelector("#lightning-count");
 const shopCoinsEl = document.querySelector("#shop-coins");
 const saveResultEl = document.querySelector("#save-result");
 const saveHintEl = document.querySelector("#save-hint");
+const savingEl = document.querySelector("#saving");
+const cancelSaveEl = document.querySelector("#cancel-save");
 
 const SHOP_ITEMS = [
   ["wall", WALL_COST, WALL_UNLOCK_WAVE],
@@ -85,6 +87,9 @@ let drawingPointer = null;
 let shopReturn = "start";
 let runRecord = false;
 let overShown = false;
+let saveTimer = 0;
+let closeTimer = 0;
+let saveStarted = false;
 let lastTime = performance.now();
 
 bestEl.textContent = String(best);
@@ -110,6 +115,7 @@ bombBtn.addEventListener("pointerdown", (event) => onArmPointer(event, "bomb"));
 acidBtn.addEventListener("pointerdown", (event) => onArmPointer(event, "acid"));
 lightningBtn.addEventListener("pointerdown", (event) => onArmPointer(event, "lightning"));
 saveResultEl.addEventListener("click", sendResult);
+cancelSaveEl.addEventListener("click", skipAutoSaveAndReplay);
 
 canvas.addEventListener("pointerdown", (event) => {
   if (game.phase !== "playing") return;
@@ -159,6 +165,14 @@ canvas.addEventListener("pointercancel", (event) => finishPointer(event.pointerI
 canvas.addEventListener("contextmenu", (event) => event.preventDefault());
 
 function begin() {
+  clearSaveTimer();
+  if (closeTimer) {
+    window.clearTimeout(closeTimer);
+    closeTimer = 0;
+  }
+  saveStarted = false;
+  savingEl.classList.add("hidden");
+  cancelSaveEl.classList.add("hidden");
   pointers.clear();
   drawingPointer = null;
   game.cancelWall();
@@ -307,8 +321,28 @@ function showGameOver() {
   const inside = insideTelegram();
   saveResultEl.classList.toggle("hidden", !inside);
   saveHintEl.classList.toggle("hidden", inside);
+  savingEl.classList.toggle("hidden", !inside);
+  cancelSaveEl.classList.toggle("hidden", !inside);
   overEl.classList.remove("hidden");
   haptic(runRecord ? "record" : "over");
+  if (inside) {
+    clearSaveTimer();
+    saveTimer = window.setTimeout(() => {
+      saveTimer = 0;
+      sendResult();
+    }, 2000);
+  }
+}
+
+function clearSaveTimer() {
+  if (!saveTimer) return;
+  window.clearTimeout(saveTimer);
+  saveTimer = 0;
+}
+
+function skipAutoSaveAndReplay() {
+  if (saveStarted) return;
+  begin();
 }
 
 function telegramApp() {
@@ -322,8 +356,16 @@ function insideTelegram() {
 
 function sendResult() {
   const telegram = telegramApp();
-  if (!insideTelegram()) return;
-  const stats = { score: game.score, wave: game.wave, coins, best };
+  if (!insideTelegram() || saveStarted) return;
+  saveStarted = true;
+  clearSaveTimer();
+  cancelSaveEl.classList.add("hidden");
+  const stats = {
+    score: game.score,
+    wave: game.wave,
+    coins,
+    best: Math.max(best, game.score),
+  };
   const initData = typeof telegram.initData === "string" ? telegram.initData : "";
   if (initData.length === 0 && typeof telegram.sendData === "function") {
     try {
@@ -337,7 +379,8 @@ function sendResult() {
   }
   const start = buildStartParam(stats);
   telegram.openTelegramLink(`https://t.me/mihmakbot?start=${start}`);
-  window.setTimeout(() => {
+  closeTimer = window.setTimeout(() => {
+    closeTimer = 0;
     try {
       telegram.close();
     } catch {
