@@ -1,4 +1,4 @@
-// Логика «Камнепада»: сетка, камни, волны, удары по площади. Без DOM.
+// Логика «Камнепада»: сетка, камни, волны, монеты, бомба, кислота, дротики. Без DOM.
 
 export const COLS = 16;
 export const ROWS = 26;
@@ -6,6 +6,19 @@ export const HIT_RADIUS = 1.9;
 export const DANGER_LINE = ROWS - 1.35;
 export const CELL_SCORE = 2;
 export const PIECE_SCORE = 5;
+
+export const BOMB_RADIUS = 4;
+export const BOMB_DAMAGE = 4;
+export const BOMB_COST = 15;
+export const BOMB_UNLOCK_WAVE = 3;
+
+export const ACID_RADIUS = 2.55;
+export const ACID_DURATION = 6;
+export const ACID_TICK = 0.4;
+export const ACID_COST = 25;
+export const ACID_UNLOCK_WAVE = 5;
+
+export const DART_FROM_WAVE = 4;
 
 const COLORS = [
   "#3ec6ff",
@@ -19,6 +32,8 @@ const COLORS = [
   "#c6f25c",
   "#f2c14e",
 ];
+
+const DART_COLOR = "#ff6a00";
 
 const BASE_SHAPES = [
   [[0, 0], [1, 0]],
@@ -94,6 +109,20 @@ export function waveConfig(level) {
   };
 }
 
+export function coinChance(level) {
+  const n = Math.max(1, Math.floor(level) || 1);
+  return Math.min(0.18, 1 / 12 + (n - 1) * 0.006);
+}
+
+export function dartChance(level) {
+  if (level < DART_FROM_WAVE) return 0;
+  return Math.min(0.55, 0.18 + (level - DART_FROM_WAVE) * 0.045);
+}
+
+export function dartSpeedMultiplier(level) {
+  return 2 + Math.max(0, level - DART_FROM_WAVE) * 0.055;
+}
+
 export function connectedGroups(cells) {
   const byKey = new Map(cells.map((cell) => [`${cell.dx},${cell.dy}`, cell]));
   const seen = new Set();
@@ -141,11 +170,13 @@ export function splitStone(stone, survivingCells, nextId) {
       y: stone.y + minY,
       vy: stone.vy,
       color: stone.color,
+      dart: Boolean(stone.dart),
       cells: group.map((cell) => ({
         dx: cell.dx - minX,
         dy: cell.dy - minY,
         hp: cell.hp,
         maxHp: cell.maxHp,
+        coin: Boolean(cell.coin),
       })),
     };
   });
@@ -207,6 +238,8 @@ export class Game {
     this.stones = [];
     this.particles = [];
     this.floaters = [];
+    this.shockwaves = [];
+    this.puddles = [];
     this.shake = 0;
     this.bannerText = "";
     this.bannerUntil = 0;
@@ -215,6 +248,7 @@ export class Game {
     this.spawnTimer = 0;
     this.gap = 0;
     this.nextId = 1;
+    this.pendingCoins = 0;
   }
 
   start() {
@@ -224,7 +258,10 @@ export class Game {
     this.stones = [];
     this.particles = [];
     this.floaters = [];
+    this.shockwaves = [];
+    this.puddles = [];
     this.shake = 0;
+    this.pendingCoins = 0;
     this.nextId = 1;
     this.beginWave(1);
   }
@@ -237,6 +274,12 @@ export class Game {
     this.gap = 0;
     this.bannerText = `Волна ${level}`;
     this.bannerUntil = this.time + 1.75;
+  }
+
+  collectCoins() {
+    const earned = this.pendingCoins;
+    this.pendingCoins = 0;
+    return earned;
   }
 
   update(dt) {
@@ -260,9 +303,26 @@ export class Game {
       this.gap = 0;
     }
 
-    for (const stone of this.stones) stone.y += stone.vy * step;
-    this.resolveCollisions();
-    if (this.stones.some((stone) => reachesDanger(stone))) this.phase = "over";
+    let remain = step;
+    while (remain > 0.00001 && this.phase === "playing") {
+      let fastest = 0;
+      for (const stone of this.stones) {
+        if (stone.vy > fastest) fastest = stone.vy;
+      }
+      const slice = fastest > 0 ? Math.min(remain, 0.35 / fastest) : remain;
+      for (const stone of this.stones) stone.y += stone.vy * slice;
+      this.resolveCollisions();
+      if (this.stones.some((stone) => reachesDanger(stone))) {
+        this.phase = "over";
+        break;
+      }
+      remain -= slice;
+    }
+
+    if (this.phase === "playing") this.tickPuddles(step);
+    if (this.phase === "playing" && this.stones.some((stone) => reachesDanger(stone))) {
+      this.phase = "over";
+    }
   }
 
   updateEffects(dt) {
@@ -283,6 +343,25 @@ export class Game {
     if (this.floaters.length) {
       this.floaters = this.floaters.filter((floater) => floater.life > 0);
     }
+    for (const wave of this.shockwaves) wave.life -= dt;
+    if (this.shockwaves.length) {
+      this.shockwaves = this.shockwaves.filter((wave) => wave.life > 0);
+    }
+  }
+
+  tickPuddles(dt) {
+    for (const puddle of this.puddles) {
+      puddle.life -= dt;
+      puddle.tick -= dt;
+      if (puddle.tick <= 0 && puddle.life > 0) {
+        this.damageInRadius(puddle.x, puddle.y, puddle.radius, 1, { quiet: true });
+        this.fizz(puddle.x, puddle.y, puddle.radius);
+        puddle.tick += ACID_TICK;
+      }
+    }
+    if (this.puddles.length) {
+      this.puddles = this.puddles.filter((puddle) => puddle.life > 0);
+    }
   }
 
   resolveCollisions() {
@@ -300,7 +379,10 @@ export class Game {
   }
 
   spawnStone() {
-    const shape = this.pickShape(this.cfg);
+    const dart = this.wave >= DART_FROM_WAVE && this.rng() < dartChance(this.wave);
+    const shape = dart
+      ? this.pickShape({ minSize: 2, maxSize: 3 })
+      : this.pickShape(this.cfg);
     const width = Math.max(...shape.map((cell) => cell[0])) + 1;
     const height = Math.max(...shape.map((cell) => cell[1])) + 1;
     const maxX = Math.max(0, COLS - width);
@@ -308,7 +390,7 @@ export class Game {
     for (let attempt = 0; attempt < 24; attempt += 1) {
       const x = maxX === 0 ? 0 : Math.floor(this.rng() * (maxX + 1));
       const y = -height - 0.25 - attempt * 0.2 - this.rng();
-      const stone = this.makeStone(shape, x, y);
+      const stone = this.makeStone(shape, x, y, dart);
       const blocked = this.stones.some((other) => overlapAmount(stone, other) > 0);
       if (!blocked) {
         placed = stone;
@@ -317,7 +399,7 @@ export class Game {
     }
     if (!placed) {
       const x = maxX === 0 ? 0 : Math.floor(this.rng() * (maxX + 1));
-      placed = this.makeStone(shape, x, -height - 8 - this.rng() * 3);
+      placed = this.makeStone(shape, x, -height - 8 - this.rng() * 3, dart);
     }
     this.stones.push(placed);
     return placed;
@@ -329,30 +411,85 @@ export class Game {
     return choices[Math.floor(this.rng() * choices.length)];
   }
 
-  makeStone(shape, x, y) {
-    const extraHp = this.cfg.level >= 4;
+  makeStone(shape, x, y, dart = false) {
+    const extraHp = !dart && this.cfg.level >= 4;
+    const chance = coinChance(this.cfg.level);
+    const speedJitter = 0.94 + this.rng() * 0.12;
+    const vy = dart
+      ? this.cfg.speed * dartSpeedMultiplier(this.cfg.level) * speedJitter
+      : this.cfg.speed * speedJitter;
     return {
       id: this.nextId++,
       x,
       y,
-      vy: this.cfg.speed * (0.92 + this.rng() * 0.16),
-      color: COLORS[Math.floor(this.rng() * COLORS.length)],
+      vy,
+      dart,
+      color: dart ? DART_COLOR : COLORS[Math.floor(this.rng() * COLORS.length)],
       cells: shape.map(([dx, dy]) => {
-        const hp = this.cfg.hp + (extraHp && this.rng() < 0.28 ? 1 : 0);
-        return { dx, dy, hp, maxHp: hp };
+        const hp = dart ? 1 : this.cfg.hp + (extraHp && this.rng() < 0.28 ? 1 : 0);
+        return { dx, dy, hp, maxHp: hp, coin: this.rng() < chance };
       }),
     };
   }
 
   applyHit(px, py) {
+    return this.damageInRadius(px, py, HIT_RADIUS, 1);
+  }
+
+  useBomb(px, py) {
+    const result = this.damageInRadius(px, py, BOMB_RADIUS, BOMB_DAMAGE);
+    if (this.phase !== "playing") return result;
+    this.shake = 1;
+    this.shockwaves.push({
+      x: px,
+      y: py,
+      radius: BOMB_RADIUS,
+      life: 0.42,
+      maxLife: 0.42,
+    });
+    for (let i = 0; i < 26; i += 1) {
+      const angle = this.rng() * Math.PI * 2;
+      const speed = 2 + this.rng() * 7;
+      this.particles.push({
+        x: px,
+        y: py,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 0.28 + this.rng() * 0.28,
+        maxLife: 0.56,
+        color: this.rng() < 0.5 ? "#ffb020" : "#ffe08a",
+        size: 0.16 + this.rng() * 0.22,
+      });
+    }
+    this.trimParticles();
+    return result;
+  }
+
+  pourAcid(px, py) {
+    if (this.phase !== "playing") return false;
+    this.puddles.push({
+      x: px,
+      y: py,
+      radius: ACID_RADIUS,
+      life: ACID_DURATION,
+      maxLife: ACID_DURATION,
+      tick: 0,
+    });
+    this.fizz(px, py, ACID_RADIUS);
+    return true;
+  }
+
+  damageInRadius(px, py, radius, amount, options = {}) {
     const result = {
       damagedCells: 0,
       destroyedCells: 0,
       destroyedPieces: 0,
       scoreGained: 0,
+      coins: 0,
     };
     if (this.phase !== "playing") return result;
-    const radiusSq = HIT_RADIUS * HIT_RADIUS;
+    const radiusSq = radius * radius;
+    const damage = Math.max(1, amount | 0);
     const next = [];
     for (const stone of this.stones) {
       const surviving = [];
@@ -366,12 +503,25 @@ export class Game {
           continue;
         }
         touched = true;
-        cell.hp -= 1;
+        cell.hp -= damage;
         if (cell.hp <= 0) {
           result.destroyedCells += 1;
           this.score += CELL_SCORE;
           result.scoreGained += CELL_SCORE;
-          this.burst(centerX, centerY, stone.color);
+          this.burst(centerX, centerY, cell.coin ? "#f5c542" : stone.color);
+          if (cell.coin) {
+            result.coins += 1;
+            this.pendingCoins += 1;
+            this.floaters.push({
+              x: centerX,
+              y: centerY - 0.35,
+              text: "+1 🪙",
+              life: 0.75,
+              maxLife: 0.75,
+              vy: -1.15,
+              coin: true,
+            });
+          }
         } else {
           result.damagedCells += 1;
           surviving.push(cell);
@@ -390,24 +540,29 @@ export class Game {
       next.push(...splitStone(stone, surviving, () => this.nextId++));
     }
     this.stones = next;
-    if (result.scoreGained > 0) {
+    if (result.scoreGained > 0 && !options.quiet) {
       this.floaters.push({
         x: px,
         y: py,
         text: `+${result.scoreGained}`,
         life: 0.55,
+        maxLife: 0.55,
         vy: -0.9,
+        coin: false,
       });
-      if (this.floaters.length > 24) this.floaters.splice(0, this.floaters.length - 24);
     }
-    if (result.destroyedCells > 0) this.shake = Math.min(1, this.shake + 0.45);
-    else if (result.damagedCells > 0) this.shake = Math.min(1, this.shake + 0.15);
+    if (this.floaters.length > 32) this.floaters.splice(0, this.floaters.length - 32);
+    if (!options.quiet) {
+      if (result.destroyedCells > 0) this.shake = Math.min(1, this.shake + (damage > 1 ? 0.7 : 0.45));
+      else if (result.damagedCells > 0) this.shake = Math.min(1, this.shake + 0.15);
+    } else if (result.destroyedCells > 0 || result.damagedCells > 0) {
+      this.shake = Math.min(1, this.shake + 0.08);
+    }
     return result;
   }
 
   burst(x, y, color) {
-    const count = 6;
-    for (let i = 0; i < count; i += 1) {
+    for (let i = 0; i < 6; i += 1) {
       const angle = this.rng() * Math.PI * 2;
       const speed = 1.4 + this.rng() * 3.2;
       this.particles.push({
@@ -421,8 +576,28 @@ export class Game {
         size: 0.1 + this.rng() * 0.16,
       });
     }
-    if (this.particles.length > 180) {
-      this.particles.splice(0, this.particles.length - 180);
+    this.trimParticles();
+  }
+
+  fizz(x, y, radius) {
+    for (let i = 0; i < 4; i += 1) {
+      this.particles.push({
+        x: x + (this.rng() - 0.5) * radius,
+        y: y + (this.rng() - 0.5) * radius * 0.7,
+        vx: (this.rng() - 0.5) * 0.5,
+        vy: -0.55 - this.rng() * 0.7,
+        life: 0.45,
+        maxLife: 0.45,
+        color: "#c6ff6a",
+        size: 0.1 + this.rng() * 0.1,
+      });
+    }
+    this.trimParticles();
+  }
+
+  trimParticles() {
+    if (this.particles.length > 200) {
+      this.particles.splice(0, this.particles.length - 200);
     }
   }
 }

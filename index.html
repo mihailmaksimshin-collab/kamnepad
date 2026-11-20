@@ -25,16 +25,34 @@
         <span class="label">Рекорд</span>
         <span id="best">0</span>
       </div>
+      <div class="stat">
+        <span class="label">Монеты</span>
+        <span id="coins">0</span>
+      </div>
     </header>
     <div id="stage">
       <canvas id="board" width="360" height="580" aria-label="Игровое поле"></canvas>
       <div id="banner" class="hidden">Волна 1</div>
+      <div id="ability-layer" class="hidden">
+        <p id="arm-hint" class="hidden">Нажмите на поле</p>
+        <div id="abilities">
+          <button type="button" id="arm-bomb" class="ability" data-kind="bomb" aria-label="Бомба">
+            <span class="ability-icon">💣</span>
+            <span class="ability-count" id="bomb-count">0</span>
+          </button>
+          <button type="button" id="arm-acid" class="ability" data-kind="acid" aria-label="Кислота">
+            <span class="ability-icon">🧪</span>
+            <span class="ability-count" id="acid-count">0</span>
+          </button>
+        </div>
+      </div>
       <section id="start" class="overlay">
         <div class="card">
           <h1>🪨 Камнепад</h1>
           <p class="tag">Не дай камням дойти до черты</p>
-          <p class="rules">Камни из клеток падают вниз. Касание и свайп бьют по площади вокруг пальца — можно сразу несколькими пальцами. Стирайте клетки, пока камень не коснулся красной черты.</p>
-          <button id="play" type="button">Играть</button>
+          <p class="rules">Касание бьёт по площади — можно несколькими пальцами. Золотые клетки дают монеты для магазина. С 4-й волны летят быстрые дротики. Не заденьте красную черту.</p>
+          <button id="play" class="primary" type="button">Играть</button>
+          <button id="shop-start" class="secondary" type="button">🛒 Магазин</button>
         </div>
       </section>
       <section id="over" class="overlay hidden">
@@ -46,7 +64,31 @@
             <li><span>Рекорд</span><b id="over-best">0</b></li>
           </ul>
           <p id="record" class="record hidden">🏆 Новый рекорд!</p>
-          <button id="again" type="button">Ещё раз</button>
+          <button id="again" class="primary" type="button">Ещё раз</button>
+          <button id="shop-over" class="secondary" type="button">🛒 Магазин</button>
+        </div>
+      </section>
+      <section id="shop" class="overlay hidden">
+        <div class="card shop-card">
+          <h2>🛒 Магазин</h2>
+          <p class="shop-balance">Монеты: <b id="shop-coins">0</b></p>
+          <article class="item" id="item-bomb">
+            <h3>💣 Бомба</h3>
+            <p>Взрыв радиусом 4 клетки. Сильный урон.</p>
+            <p class="price">15 🪙</p>
+            <p class="stock">В запасе: <b id="stock-bomb">0</b></p>
+            <p class="lock hidden" id="lock-bomb">Нужна волна 3</p>
+            <button type="button" class="buy" id="buy-bomb">Купить за 15</button>
+          </article>
+          <article class="item" id="item-acid">
+            <h3>🧪 Кислота</h3>
+            <p>Зелёная лужа на 6 секунд жжёт камни, которые через неё падают.</p>
+            <p class="price">25 🪙</p>
+            <p class="stock">В запасе: <b id="stock-acid">0</b></p>
+            <p class="lock hidden" id="lock-acid">Нужна волна 5</p>
+            <button type="button" class="buy" id="buy-acid">Купить за 25</button>
+          </article>
+          <button type="button" class="ghost" id="shop-close">Закрыть</button>
         </div>
       </section>
     </div>
